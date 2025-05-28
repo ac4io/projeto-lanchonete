@@ -1,9 +1,65 @@
+import email
 from unittest import skip
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
 
 from app import models, schemas # Importa seus modelos e schemas
+from app.security import get_password_hash # <-- Importa a função de hash de senha
+
+# ====================================================================
+# Operações CRUD para Usuários
+# ====================================================================
+
+async def get_user(db: AsyncSession, user_id: int):
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    return result.scalars().first()
+
+async def get_user_by_email(db: AsyncSession, email:str):
+    result = await db.execute(select(models.User).where(models.User.email == email))
+    return result.scalars().first()
+
+async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
+    result = await db.execute((select(models.User).offset(skip).limit(limit)))
+    return result.scalars().all()
+
+async def create_user(db: AsyncSession, user: schemas.UserCreate):
+    hashed_password = get_password_hash(user.password) #Hasheia a senha
+    db_user = models.User(
+        email=user.email,
+        hashed_password=hashed_password,
+        is_active=user.is_active,
+        is_owner=user.is_owner
+    )
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+# ====================================================================
+# Operações CRUD para Estabelecimentos
+# ====================================================================
+
+async def get_establishment(db: AsyncSession, establishment_id: int):
+    result = await db.execute(select(models.Establishment).where(models.Establishment.id == establishment_id))
+    return result.scalars().first()
+
+async def get_establishment_by_owner_id(db: AsyncSession, owner_id: int):
+    result = await db.execute(select(models.Establishment).where(models.Establishment.owner_id == owner_id))
+    return result.scalars().first()
+
+async def create_establishment(db: AsyncSession, establishment: schemas.EstablishmentCreate):
+    db_establishment = models.Establishment(
+        name=establishment.name,
+        address=establishment.address,
+        phone=establishment.phone,
+        description=establishment.description,
+        owner_id=establishment.owner_id
+    )
+    db.add(db_establishment)
+    await db.commit()
+    await db.refresh(db_establishment)
+    return db_establishment
 
 # ====================================================================
 # Operações CRUD para Produtos

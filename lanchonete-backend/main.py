@@ -5,9 +5,10 @@ from app.database import engine, Base
 import asyncio
 from app import models # Importa todos os modelos definidos em models.py
 
-# Importa os routers que você criou
+# Importa TODOS os routers que você criou
 from app.routers import products
-# Você adicionará outros routers aqui: from app.routers import users, orders, categories, establishments
+from app.routers import users
+from app.routers import establishments
 
 # Cria uma instância da aplicação FastAPI
 app = FastAPI(
@@ -28,13 +29,10 @@ async def startup_event():
     await create_db_tables()
     print("Tabelas criadas ou já existentes.")
 
-# Inclui os routers na aplicação principal
+# Inclui os routers na aplicação principal (apenas uma vez para cada)
 app.include_router(products.router)
-# Você adicionará outros routers aqui:
-# app.include_router(users.router)
-# app.include_router(orders.router)
-# app.include_router(categories.router)
-# app.include_router(establishments.router)
+app.include_router(users.router)
+app.include_router(establishments.router)
 
 
 # Define a rota raiz (endpoint) (já configurado)
