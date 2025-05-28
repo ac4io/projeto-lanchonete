@@ -1,5 +1,5 @@
 import typing
-from pydantic import BaseModel, Basemodel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -26,7 +26,7 @@ class UserResponse(UserBase):
 # Schemas de Estabelecimento
 # ====================================================================
 
-class EstablishmentBase(Basemodel):
+class EstablishmentBase(BaseModel):
     name: str = Field(..., min_length=3, max_length=100)
     address: str = Field(..., min_length=5, max_length=200)
     phone: str = Field(..., min_length=8, max_length=20)
@@ -48,7 +48,7 @@ class EstablishmentResponse(EstablishmentBase):
 # Schemas de Categoria
 # ====================================================================
 
-class CategoryBase(Basemodel):
+class CategoryBase(BaseModel):
     name: str = Field(..., min_length=2 ,max_length=50)
 
 class CategoryCreate(CategoryBase):
@@ -58,7 +58,7 @@ class CategoryResponse(CategoryBase):
     id: int
 
     class Config:
-        from_attirbutes = True
+        from_attributes = True
 
 # ====================================================================
 # Schemas de Produto
