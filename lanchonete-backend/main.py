@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.database import engine, Base
 import asyncio
 from app import models # Importa todos os modelos definidos em models.py
+from fastapi.middleware.cors import CORSMiddleware
 
 # Importa TODOS os routers que você criou
 from app.routers import products
@@ -35,6 +36,26 @@ app = FastAPI(
     }
 )
 
+origins = [
+    "http://localhost",
+    "http://localhost:8000", # Porta do seu FastAPI
+    "http://localhost:5173", # Porta padrão do Vite/React, se estiver usando ou quiser testar com ele
+    "http://localhost:54270", # <--- **IMPORTANTE**: Adicione a porta em que seu APP FLUTTER WEB está rodando!
+                              # Você pode ver essa porta no terminal quando você roda `flutter run -d chrome`
+                              # Geralmente é algo como 5XXXX ou 6XXXX.
+                              # Ex: "http://localhost:58432"
+    "http://10.0.2.2:8000",   # Para emulador Android acessar o FastAPI
+    "http://127.0.0.1:8000",
+    "http://192.168.X.X:8000", # Se você estiver testando em um dispositivo físico, adicione o IP da sua máquina aqui
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # Permite todos os métodos (GET, POST, PUT, DELETE, OPTIONS, etc.)
+    allow_headers=["*"], # Permite todos os cabeçalhos
+)
 
 # Função para criar as tabelas no banco de dados (já configurado)
 async def create_db_tables():
