@@ -9,13 +9,32 @@ from app import models # Importa todos os modelos definidos em models.py
 from app.routers import products
 from app.routers import users
 from app.routers import establishments
+from app.routers import categories
+from app.routers import orders 
 
 # Cria uma instância da aplicação FastAPI
 app = FastAPI(
     title="API de Lanchonete",
     description="API para gerenciamento de pedidos e produtos de lanchonete.",
-    version="1.0.0"
+    version="1.0.0",
+    # Adicione a configuração de segurança OpenAPI para JWT
+    openapi_extra={
+        "security": [
+            {"BearerAuth": []} # Nome do esquema de segurança que você definirá abaixo
+        ],
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": { # Nome do esquema de segurança
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT",
+                    "description": "Insira o token JWT com o prefixo 'Bearer '"
+                }
+            }
+        }
+    }
 )
+
 
 # Função para criar as tabelas no banco de dados (já configurado)
 async def create_db_tables():
@@ -33,7 +52,8 @@ async def startup_event():
 app.include_router(products.router)
 app.include_router(users.router)
 app.include_router(establishments.router)
-
+app.include_router(categories.router)
+app.include_router(orders.router)
 
 # Define a rota raiz (endpoint) (já configurado)
 @app.get("/")

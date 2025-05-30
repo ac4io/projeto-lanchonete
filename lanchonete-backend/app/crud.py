@@ -1,11 +1,10 @@
 # lanchonete_backend/app/crud.py
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
 from datetime import datetime # Importa datetime para pedidos
-from sqlalchemy.orm import selectinload # Para carregar relações em pedidos
-from sqlalchemy import delete # Para usar na exclusão de itens de pedido
 
 from app import models, schemas
 from app.security import get_password_hash
@@ -51,41 +50,18 @@ async def get_establishment_by_owner_id(db: AsyncSession, owner_id: int):
     result = await db.execute(select(models.Establishment).where(models.Establishment.owner_id == owner_id))
     return result.scalars().first()
 
-async def get_establishments(db: AsyncSession, skip: int = 0, limit: int = 100):
-    result = await db.execute(select(models.Establishment).offset(skip).limit(limit))
-    return result.scalars().all()
-
-async def create_establishment(db: AsyncSession, establishment: schemas.EstablishmentCreate, owner_id: int):
+async def create_establishment(db: AsyncSession, establishment: schemas.EstablishmentCreate, owner_id: int): # <--- ATENÇÃO AQUI: owner_id deve estar presente
     db_establishment = models.Establishment(
         name=establishment.name,
         address=establishment.address,
         phone=establishment.phone,
         description=establishment.description,
-        owner_id=owner_id # Agora owner_id vem como argumento separado
+        owner_id=owner_id
     )
     db.add(db_establishment)
     await db.commit()
     await db.refresh(db_establishment)
     return db_establishment
-
-async def update_establishment(db: AsyncSession, establishment_id: int, establishment_update: schemas.EstablishmentCreate):
-    db_establishment = await get_establishment(db, establishment_id)
-    if db_establishment:
-        update_data = establishment_update.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(db_establishment, key, value)
-        await db.commit()
-        await db.refresh(db_establishment)
-    return db_establishment
-
-async def delete_establishment(db: AsyncSession, establishment_id: int):
-    db_establishment = await get_establishment(db, establishment_id)
-    if db_establishment:
-        # Opcional: considerar deletar produtos relacionados ou definir owner_id como NULL
-        await db.delete(db_establishment)
-        await db.commit()
-        return {"message": "Estabelecimento deletado com sucesso!"}
-    return None
 
 # ====================================================================
 # Operações CRUD para Categorias
@@ -171,45 +147,53 @@ async def delete_product(db: AsyncSession, product_id: int):
 # Operações CRUD para Pedidos
 # ====================================================================
 
-async def create_order(db: AsyncSession, order: schemas.OrderCreate):
+async def create_order(db: AsyncSession, order: schemas.OrderCreate, customer_id: int): # <--- ADICIONE customer_id aqui
+    total_amount = 0
+    order_items_models = []
+
+    for item_data in order.items:
+        product = await get_product(db, item_data.product_id)
+        if not product:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with ID {item_data.product_id} not found.")
+
+        # Calculate price_at_time_of_order
+        price_at_time_of_order = product.price
+        total_amount += price_at_time_of_order * item_data.quantity
+
+        order_item = models.OrderItem(
+            product_id=item_data.product_id,
+            quantity=item_data.quantity,
+            price_at_time_of_order=price_at_time_of_order
+        )
+        order_items_models.append(order_item)
+
     db_order = models.Order(
-        customer_id=order.customer_id,
         establishment_id=order.establishment_id,
-        total_amount=0.0, # Será calculado a partir dos itens
+        customer_id=customer_id, # <--- Use o customer_id passado como argumento
         status=order.status,
         delivery_address=order.delivery_address,
         is_pickup=order.is_pickup,
         payment_method=order.payment_method,
-        order_date=datetime.utcnow() # Data do pedido
+        total_amount=total_amount,
+        order_date=datetime.now()
     )
+
     db.add(db_order)
+    await db.flush() # flush para que db_order.id seja populado antes de adicionar os itens
+
+    for order_item_model in order_items_models:
+        order_item_model.order_id = db_order.id # Associa o item ao pedido
+        db.add(order_item_model)
+
     await db.commit()
     await db.refresh(db_order)
 
-    total_amount = 0.0
-    for item_data in order.items:
-        # Obtém o produto para pegar o preço atual
-        product = await get_product(db, item_data.product_id)
-        if not product:
-            # Isso deve ser tratado no router antes de chamar o CRUD,
-            # mas mantemos aqui para robustez ou testes diretos
-            raise ValueError(f"Produto com ID {item_data.product_id} não encontrado.")
+    # Carregar as relações para a resposta
+    # Isso é importante para que o OrderResponse inclua os itens
+    await db.refresh(db_order, attribute_names=["items"])
+    for item in db_order.items:
+        await db.refresh(item, attribute_names=["product"]) # Se OrderItem.product estiver no schemas.OrderItemResponse
 
-        # Define o preço do item no momento do pedido
-        item_price = product.price
-
-        db_order_item = models.OrderItem(
-            order_id=db_order.id,
-            product_id=item_data.product_id,
-            quantity=item_data.quantity,
-            price_at_time_of_order=item_price
-        )
-        db.add(db_order_item)
-        total_amount += (item_price * item_data.quantity)
-
-    db_order.total_amount = total_amount # Atualiza o total do pedido
-    await db.commit()
-    await db.refresh(db_order) # Refreshes novamente para incluir os itens se necessário na resposta
     return db_order
 
 async def get_order(db: AsyncSession, order_id: int):
@@ -251,9 +235,13 @@ async def update_order(db: AsyncSession, order_id: int, order_update: schemas.Or
 async def delete_order(db: AsyncSession, order_id: int):
     db_order = await get_order(db, order_id)
     if db_order:
-        # Deleta os itens do pedido primeiro para evitar erro de chave estrangeira
+        # Deleta os itens do pedido primeiro
         await db.execute(delete(models.OrderItem).where(models.OrderItem.order_id == order_id))
         await db.delete(db_order)
         await db.commit()
         return {"message": "Pedido deletado com sucesso!"}
     return None
+
+# Importações necessárias para as novas funções de pedido (coloque no topo do arquivo crud.py)
+from sqlalchemy.orm import selectinload
+from sqlalchemy import delete

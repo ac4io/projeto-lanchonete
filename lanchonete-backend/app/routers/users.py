@@ -18,7 +18,7 @@ from app.models import User # Para o CurrentUser dependency
 
 # Para a autenticação usando OAuth2PasswordBearer
 from fastapi.security import OAuth2PasswordBearer
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/token") # Define a URL para obter o token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/token")
 
 router = APIRouter(
     prefix="/users",
